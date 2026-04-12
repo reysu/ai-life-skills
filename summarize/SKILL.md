@@ -345,6 +345,7 @@ Summary length must be **proportional** to the source material. A 10-minute vide
 6. **Use actual Japanese/Chinese characters** for non-English words, not romanization
 7. **Timestamps** on topic headings and quotes when available (YouTube, podcasts)
 8. **`people` field**: only people who created/appeared in the content. Mentioned people go in `## People Mentioned`
+9. **Alias notation for wikilinks in Japanese summaries** — Reference note filenames are always English (see Step 5b). When the summary body is in Japanese, use alias notation so the displayed text reads naturally in Japanese: `[[English Concept Name|日本語のテキスト]]`. Example: 「このイヤホンは[[Harman Target|ハーマンカーブ]]に近い滑らかな[[Frequency Response|周波数特性]]を持ち…」. Use a plain `[[English Concept Name]]` only when the English term itself reads naturally in the surrounding text.
 
 ### Audience adaptation
 
@@ -381,6 +382,9 @@ done
 #### Technical concepts, companies, products, places
 Create in `07 References/<Term>.md`:
 
+- **Filename**: always English (e.g. `Frequency Response.md`, `Harman Target.md`)
+- **Body language**: always English — definitions and explanations must be written in English regardless of the source content language. If the source is Japanese, translate the concept description into English before writing it.
+
 ```markdown
 ---
 created: YYYY-MM-DDT00:00
@@ -389,7 +393,7 @@ type: reference
 unread: true
 ---
 
-[2-4 sentence plain-language explanation. Use [[wikilinks]] to cross-reference related concepts.]
+[2-4 sentence plain-language explanation in English. Use [[wikilinks]] to cross-reference related concepts.]
 ```
 
 #### People
