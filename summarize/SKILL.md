@@ -38,16 +38,17 @@ Alternative to `mlx_whisper`: set `ELEVENLABS_API_KEY` to use ElevenLabs Scribe 
 The skill reads these variables at runtime. Override any of them via environment variables, or edit the defaults here:
 
 ```
-VAULT_ROOT     = $VAULT_ROOT        # auto-detected if not set (see Step 0a)
-SUMMARIES_DIR  = 08 Summaries
-REFERENCES_DIR = 07 References
-PEOPLE_DIR     = 04 People
-DAILY_DIR      = 02 Daily
-TEMPLATES_DIR  = _Templates
+AI_VAULT_ROOT     = $AI_VAULT_ROOT        # auto-detected if not set (see Step 0a)
+PKM_VAULT_ROOT       = $PKM_VAULT_ROOT          # personal vault root for daily notes; defaults to AI_VAULT_ROOT if not set
+SUMMARIES_DIR  = summaries
+REFERENCES_DIR = concepts
+PEOPLE_DIR     = profiles
+DAILY_DIR      = daily
+TEMPLATES_DIR  = templates
 BASES_DIR      = _Bases
 ```
 
-All paths below are relative to `$VAULT_ROOT`.
+All paths below are relative to `$AI_VAULT_ROOT`.
 
 ## Trigger
 
@@ -61,14 +62,14 @@ When the user provides content to summarize: a URL (YouTube, article, blog), a P
 
 ## Step 0: Bootstrap check (first run)
 
-Before doing any work, verify the environment is ready. **Skip any check that already passes** — only prompt the user when something is actually missing. Do not re-run Step 0 on subsequent invocations if the initial setup succeeded; you can tell it already ran if `$VAULT_ROOT` resolves and the required folders + tools are present.
+Before doing any work, verify the environment is ready. **Skip any check that already passes** — only prompt the user when something is actually missing. Do not re-run Step 0 on subsequent invocations if the initial setup succeeded; you can tell it already ran if `$AI_VAULT_ROOT` resolves and the required folders + tools are present.
 
 ### 0a. Resolve the vault root
 
 ```bash
 vault=""
-if [ -n "$VAULT_ROOT" ]; then
-  vault="$VAULT_ROOT"
+if [ -n "$AI_VAULT_ROOT" ]; then
+  vault="$AI_VAULT_ROOT"
 else
   dir="$PWD"
   while [ "$dir" != "/" ]; do
@@ -77,19 +78,23 @@ else
   done
 fi
 echo "Vault: ${vault:-NOT FOUND}"
+
+# PKM_VAULT_ROOT defaults to AI_VAULT_ROOT if not set separately
+pkm_root="${PKM_VAULT_ROOT:-$vault}"
+echo "PKM (daily notes): ${pkm_root:-NOT FOUND}"
 ```
 
-If no vault is found, ask the user: **"What's the absolute path to your Obsidian vault?"** Use their answer as `$VAULT_ROOT` for the session (and suggest they set it permanently in their shell profile).
+If no vault is found, ask the user: **"What's the absolute path to your Obsidian vault?"** Use their answer as `$AI_VAULT_ROOT` for the session (and suggest they set it permanently in their shell profile). If `$PKM_VAULT_ROOT` is not set, it defaults to `$AI_VAULT_ROOT`.
 
 ### 0b. Check required folders
 
 ```bash
 for d in "$SUMMARIES_DIR" "$REFERENCES_DIR" "$PEOPLE_DIR" "$DAILY_DIR" "$TEMPLATES_DIR"; do
-  [ -d "$VAULT_ROOT/$d" ] || echo "MISSING: $d"
+  [ -d "$AI_VAULT_ROOT/$d" ] || echo "MISSING: $d"
 done
 ```
 
-For each missing folder, ask the user: **"Create `<folder>` in your vault? [y/N]"** — if yes, `mkdir -p "$VAULT_ROOT/<folder>"`.
+For each missing folder, ask the user: **"Create `<folder>` in your vault? [y/N]"** — if yes, `mkdir -p "$AI_VAULT_ROOT/<folder>"`.
 
 ### 0c. Check required CLI tools
 
@@ -108,7 +113,7 @@ The skill ships two person templates in its own `templates/` folder:
 - **`new person template.md`** — full version with Dataview callouts (current age, total hours talked) and Obsidian Bases embeds (`posts.base`, `books.base`, `meetings.base`). Requires the Dataview plugin and Obsidian Bases.
 - **`new person template (minimal).md`** — stripped version. Just frontmatter, a `> [!info]` summary callout, and an `## updates` section. Works in any vault.
 
-If `$VAULT_ROOT/$TEMPLATES_DIR/new person template.md` already exists, leave it alone — the user may have their own customized version.
+If `$AI_VAULT_ROOT/$TEMPLATES_DIR/new person template.md` already exists, leave it alone — the user may have their own customized version.
 
 Otherwise, ask the user which version to install:
 
@@ -120,7 +125,7 @@ Then copy the chosen template into the user's `_Templates/` folder:
 
 ```bash
 skill_dir="$(dirname "$0")"   # or wherever this SKILL.md lives
-target="$VAULT_ROOT/$TEMPLATES_DIR/new person template.md"
+target="$AI_VAULT_ROOT/$TEMPLATES_DIR/new person template.md"
 
 if [ ! -f "$target" ]; then
   # Use the user's choice — default to minimal
@@ -369,7 +374,7 @@ Then check which ones are missing:
 
 ```bash
 for term in <each extracted term>; do
-  found=$(find "$VAULT_ROOT" -name "$term.md" \
+  found=$(find "$AI_VAULT_ROOT" -name "$term.md" \
     -not -path "*/.Trash/*" -not -path "*/Clippings/*" 2>/dev/null | head -1)
   if [ -z "$found" ]; then echo "MISSING: $term"; fi
 done
@@ -397,7 +402,7 @@ unread: true
 ```
 
 #### People
-Create in `$PEOPLE_DIR/<Full Name>.md` using the person template at `$VAULT_ROOT/$TEMPLATES_DIR/new person template.md` (installed by Step 0d). Conventions:
+Create in `$PEOPLE_DIR/<Full Name>.md` using the person template at `$AI_VAULT_ROOT/$TEMPLATES_DIR/new person template.md` (installed by Step 0d). Conventions:
 
 - **Public figures**: research and write a rich bio (birthday, career, links, key facts). The `> [!info]` callout should be a substantive snapshot — life story, mission, current focus — not a stub.
 - **Private individuals**: minimal note with only what's known from the content. The note will grow naturally over time.
@@ -415,10 +420,10 @@ After all notes are created, re-run the audit from 5a to confirm zero missing no
 
 ## Step 6: Update bases (optional — skip if not using Obsidian Bases)
 
-This step only applies if `$VAULT_ROOT/$BASES_DIR/posts.base` exists. If it doesn't, skip Step 6 entirely.
+This step only applies if `$AI_VAULT_ROOT/$BASES_DIR/posts.base` exists. If it doesn't, skip Step 6 entirely.
 
 ```bash
-[ -f "$VAULT_ROOT/$BASES_DIR/posts.base" ] || echo "No posts.base — skipping Step 6"
+[ -f "$AI_VAULT_ROOT/$BASES_DIR/posts.base" ] || echo "No posts.base — skipping Step 6"
 ```
 
 If it does exist:
@@ -445,7 +450,7 @@ Named view YAML block to append under the `views:` list:
 
 ## Step 7: Update daily note
 
-Update `$VAULT_ROOT/$DAILY_DIR/YYYY/MM/MM-DD-YY ddd.md` (e.g. `02 Daily/2026/04/04-11-26 Sat.md`). Create the `YYYY/MM/` subdirectories if they don't exist. No `# Title` heading — the filename is the title. Set `unread: true` in frontmatter.
+Update `$PKM_VAULT_ROOT/$DAILY_DIR/YYYYMMDD.md` (e.g. `daily/20260414.md`). Create the file if it doesn't exist. No `# Title` heading — the filename is the title. Set `unread: true` in frontmatter.
 
 ```markdown
 ## content summary
