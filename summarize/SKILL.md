@@ -84,7 +84,12 @@ pkm_root="${PKM_VAULT_ROOT:-$vault}"
 echo "PKM (daily notes): ${pkm_root:-NOT FOUND}"
 ```
 
-If no vault is found, ask the user: **"What's the absolute path to your Obsidian vault?"** Use their answer as `$AI_VAULT_ROOT` for the session (and suggest they set it permanently in their shell profile). If `$PKM_VAULT_ROOT` is not set, it defaults to `$AI_VAULT_ROOT`.
+If no vault is found, ask the user:
+
+> **What's the absolute path to your Obsidian vault?**
+> Recommended: use a **new, dedicated Obsidian vault** for this skill — not your existing personal vault. The skill creates and modifies many notes and folders, and a clean vault avoids polluting your existing notes. If you don't have one yet, create an empty folder, open it in Obsidian (File → Open vault as folder), and paste that path here.
+
+After they answer, validate that `<answer>/.obsidian/` exists before using it — if not, warn that the path doesn't look like an Obsidian vault (they may need to open it in Obsidian first) and ask them to confirm or re-enter. Use the validated answer as `$VAULT_ROOT` for the session (and suggest they set it permanently in their shell profile). If `$PKM_VAULT_ROOT` is not set, it defaults to `$VAULT_ROOT`.
 
 ### 0b. Check required folders
 
@@ -108,7 +113,7 @@ For each missing tool, tell the user what's missing and **ask before installing*
 
 ### 0d. Install the person template if missing
 
-The skill ships two person templates in its own `templates/` folder:
+The skill ships two person templates in the repo's `templates/` folder (shared with `summarize-call`):
 
 - **`new person template.md`** — full version with Dataview callouts (current age, total hours talked) and Obsidian Bases embeds (`posts.base`, `books.base`, `meetings.base`). Requires the Dataview plugin and Obsidian Bases.
 - **`new person template (minimal).md`** — stripped version. Just frontmatter, a `> [!info]` summary callout, and an `## updates` section. Works in any vault.
@@ -129,15 +134,48 @@ target="$AI_VAULT_ROOT/$TEMPLATES_DIR/new person template.md"
 
 if [ ! -f "$target" ]; then
   # Use the user's choice — default to minimal
-  src="$skill_dir/templates/new person template (minimal).md"
-  # if user picked full: src="$skill_dir/templates/new person template.md"
+  src="$skill_dir/../templates/new person template (minimal).md"
+  # if user picked full: src="$skill_dir/../templates/new person template.md"
   cp "$src" "$target"
 fi
 ```
 
 Note: whichever version gets installed lands at `_Templates/new person template.md` (no `(minimal)` suffix) so the skill's later references work uniformly.
 
-Once Step 0 passes, proceed to Step 1.
+Once Step 0 passes, proceed to Step 0.5.
+
+## Step 0.5: Determine depth mode
+
+Before extraction, establish which depth the user wants:
+
+1. **Scan the invocation first.** If the user's request already specifies a mode, use it and skip the prompt:
+   - Words like `minimal`, `fast`, `quick`, `--minimal`, `-m` → minimal mode
+   - Words like `detailed`, `deep`, `full`, `--detailed`, `-d` → detailed mode
+2. **Otherwise, prompt.** No default — if unspecified, ask every time:
+
+> **Depth?**
+> 1. **Detailed** (best results) — full reference notes for every wikilinked concept, person notes for every mentioned person, parallel highest-available-model subagents per section, base updates
+> 2. **Minimal** (fast) — summary note only, wikilinks left dangling, person notes for creators/guests only, Sonnet summary
+
+This keeps interactive runs explicit while letting scheduled tasks / cron / `/loop` pass the mode in the invocation (e.g. `/summarize <url> minimal`) without blocking on input.
+
+The chosen mode determines which steps run:
+
+| Step | Detailed | Minimal |
+|---|---|---|
+| 1 Extract text | ✓ | ✓ |
+| 1b Save transcript | ✓ | ✓ |
+| 2 Output structure | ✓ | ✓ |
+| 3a Depth from word count | ✓ | ✓ |
+| 3b Parallel subagents | ✓ (>3000 words, highest available model) | ✓ (>3000 words, Sonnet) |
+| 4 Assemble summary | ✓ | ✓ (skip `## People Mentioned` section) |
+| 5 Reference notes (concepts) | ✓ | ✗ — wikilinks left dangling |
+| 5 Person notes | ✓ (all mentioned) | ✓ (creators/guests only — those in `people` frontmatter) |
+| 5c Dangling-link audit | ✓ | ✗ |
+| 6 Bases update | ✓ (if bases exist) | ✗ |
+| 7 Daily note | ✓ | ✓ |
+
+For book chapter-by-chapter depth (Step 1 book section), detailed mode gets the full 300-600 words per chapter; minimal mode gets a flatter single summary regardless of chapter count.
 
 ## Step 1: Detect content type and extract text
 
@@ -304,7 +342,7 @@ Summary length must be **proportional** to the source material. A 10-minute vide
 
 ### 3b. Plan sections and dispatch
 
-**For long content (>3000 source words):** dispatch parallel **Opus** subagents — one per section — to summarize simultaneously. Each subagent gets:
+**For long content (>3000 source words):** dispatch parallel subagents (see Model usage table for which model) — one per section — to summarize simultaneously. Each subagent gets:
 - The section text
 - The audience level
 - A **specific word count target** (calculated from 3a above)
@@ -312,7 +350,7 @@ Summary length must be **proportional** to the source material. A 10-minute vide
 
 **For short content (<3000 source words):** summarize directly without subagents.
 
-**NEVER use Haiku or Sonnet for summarization.** Always Opus.
+**Model choice**: detailed mode uses the highest available model (Opus if the user has access, else Sonnet); minimal mode always uses Sonnet. Never Haiku.
 
 ## Step 4: Assemble the summary note
 
@@ -367,8 +405,9 @@ Summary length must be **proportional** to the source material. A 10-minute vide
 
 After the summary note is fully assembled, extract every unique wikilink programmatically:
 
+The regex excludes `|` (alias), `#` (heading ref), and `^` (block ref) so `[[Target|Alias]]`, `[[Page#Heading]]`, and `[[Page^block]]` all resolve to the canonical note name (`Target` / `Page`):
 ```bash
-grep -o '\[\[[^]|]*' "<summary_note_path>" | sed 's/\[\[//' | sort -u
+grep -oE '\[\[[^]|#^]+' "<summary_note_path>" | sed 's/\[\[//' | sort -u
 ```
 
 Then check which ones are missing:
@@ -413,7 +452,7 @@ Create in `$PEOPLE_DIR/<Full Name>.md` using the person template at `$AI_VAULT_R
 - **`unread: true`** in frontmatter on every new or modified note.
 
 #### Dispatch in parallel
-For large numbers of missing notes (>10), use parallel **Opus** subagents in batches of ~20-25 notes each. Each subagent creates the notes and returns confirmation.
+For large numbers of missing notes (>10), use parallel subagents (highest available model) in batches of ~20-25 notes each. Each subagent creates the notes and returns confirmation.
 
 ### 5c. Verify — no dangling links
 
@@ -461,13 +500,13 @@ Append to `$PKM_VAULT_ROOT/$DAILY_DIR/YYYY/MM/DD.md` (e.g. `daily/2026/04/14.md`
 
 ## Model usage
 
-| Task | Model |
-|------|-------|
-| Content extraction | Scripts (defuddle, pdftotext, yt-dlp) |
-| Section summarization | **Opus** subagents (parallel) |
-| Reference note creation | **Opus** subagents (parallel batches) |
-| Person note creation | **Opus** |
-| **NEVER** | **Haiku or Sonnet** |
+| Task | Detailed | Minimal |
+|------|----------|---------|
+| Content extraction | Scripts (defuddle, pdftotext, yt-dlp) | Scripts |
+| Section summarization | Highest available (Opus if accessible, else Sonnet) | **Sonnet** |
+| Reference note creation | Highest available | (skipped) |
+| Person note creation | Highest available | **Sonnet** (creators/guests only) |
+| **NEVER** | **Haiku** | **Haiku** |
 
 ## Key rules
 
