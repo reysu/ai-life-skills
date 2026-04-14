@@ -350,7 +350,8 @@ Summary length must be **proportional** to the source material. A 10-minute vide
 6. **Use actual Japanese/Chinese characters** for non-English words, not romanization
 7. **Timestamps** on topic headings and quotes when available (YouTube, podcasts)
 8. **`people` field**: only people who created/appeared in the content. Mentioned people go in `## People Mentioned`
-9. **Alias notation for wikilinks in Japanese summaries** — Reference note filenames are always English (see Step 5b). When the summary body is in Japanese, use alias notation so the displayed text reads naturally in Japanese: `[[English Concept Name|日本語のテキスト]]`. Example: 「このイヤホンは[[Harman Target|ハーマンカーブ]]に近い滑らかな[[Frequency Response|周波数特性]]を持ち…」. Use a plain `[[English Concept Name]]` only when the English term itself reads naturally in the surrounding text.
+9. **Write summary body in Japanese** — regardless of the source content language, the summary note body (tldr, sections, People Mentioned) must be written in Japanese.
+10. **Alias notation for wikilinks in Japanese summaries** — Reference note filenames are always English (see Step 5b). Use alias notation so wikilinks read naturally in Japanese: `[[English Concept Name|日本語のテキスト]]`. Example: 「このイヤホンは[[Harman Target|ハーマンカーブ]]に近い滑らかな[[Frequency Response|周波数特性]]を持ち…」. Use a plain `[[English Concept Name]]` only when the English term reads naturally in the surrounding Japanese text.
 
 ### Audience adaptation
 
@@ -450,13 +451,12 @@ Named view YAML block to append under the `views:` list:
 
 ## Step 7: Update daily note
 
-Update `$PKM_VAULT_ROOT/$DAILY_DIR/YYYYMMDD.md` (e.g. `daily/20260414.md`). Create the file if it doesn't exist. No `# Title` heading — the filename is the title. Set `unread: true` in frontmatter.
+Append to `$PKM_VAULT_ROOT/$DAILY_DIR/YYYY/MM/DD.md` (e.g. `daily/2026/04/14.md`). If the file doesn't exist, create it with `unread: true` frontmatter. Add the entry under the `### Inputs` section if it exists; otherwise append at the end.
 
 ```markdown
-## content summary
+### Inputs
+
 - summarized [[Note Title]] — [1-line description of what it is]
-- created reference notes: [[Term 1]], [[Term 2]], ...
-- created person notes: [[Person 1]], [[Person 2]], ...
 ```
 
 ## Model usage
@@ -481,3 +481,4 @@ Update `$PKM_VAULT_ROOT/$DAILY_DIR/YYYYMMDD.md` (e.g. `daily/20260414.md`). Crea
 8. **Always embed/link the source** — PDF embed, vid embed, or source URL in frontmatter
 9. **`> [!tldr]`** is mandatory — every summary starts with a concise overview callout
 10. **Person note `## updates` links to the content note, NEVER the daily note**
+11. **Summary body is always Japanese** — source language does not affect output language
